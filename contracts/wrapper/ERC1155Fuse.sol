@@ -142,11 +142,7 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
         uint256 t = _tokens[tokenId];
         owner = address(uint160(t));
         expiry = uint64(t >> 192);
-        if (block.timestamp > expiry) {
-            fuses = 0;
-        } else {
-            fuses = uint32(t >> 160);
-        }
+        fuses = uint32(t >> 160);
     }
 
     /**
@@ -249,6 +245,9 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
             uint256(node)
         );
 
+        uint32 parentControlledFuses = (uint32(type(uint16).max) << 16) &
+            oldFuses;
+
         if (oldExpiry > expiry) {
             expiry = oldExpiry;
         }
@@ -260,7 +259,7 @@ abstract contract ERC1155Fuse is ERC165, IERC1155, IERC1155MetadataURI {
             "ERC1155: newOwner cannot be the NameWrapper contract"
         );
 
-        _setData(tokenId, owner, fuses | oldFuses, expiry);
+        _setData(tokenId, owner, fuses | parentControlledFuses, expiry);
         emit TransferSingle(msg.sender, address(0x0), owner, tokenId, 1);
         _doSafeTransferAcceptanceCheck(
             msg.sender,
