@@ -33,7 +33,7 @@ contract NameWrapperTest is PTest {
     function setUp() public {
         // warp beyond expire + grace period
         vm.warp(7776000 + 90 + 1);
-        
+
         agent = getAgent();
         registry = new ENSRegistry();
 
@@ -115,48 +115,138 @@ contract NameWrapperTest is PTest {
         // Invariant:
         // Subdomain should not be transferable if parent domain is expired.
 
-        string memory label = "testname";
-        string memory sublabel = "sub";
-        uint256 labelHash = uint256(labelhash(label));
-        string memory name = string(abi.encodePacked(label, ".eth"));
+        string memory parentLabel = "testname";
+        string memory childLabel = "sub";
+        uint256 labelHash = uint256(labelhash(parentLabel));
+        string memory name = string(abi.encodePacked(parentLabel, ".eth"));
+        (, bytes32 testnameNamehash) = NameEncoder.dnsEncodeName(name);
 
         wrapper.setController(alice, true);
         baseRegistrar.addController(alice);
 
         vm.startPrank(alice);
-
-        assertEq(baseRegistrar.available(labelHash), true);
-        baseRegistrar.register(labelHash, alice, 84600);
         baseRegistrar.setApprovalForAll(address(wrapper), true);
-        assertEq(baseRegistrar.ownerOf(labelHash), address(alice));
 
-        wrapper.wrapETH2LD(
-            label,
-            alice,
-            CAN_DO_EVERYTHING,
-            86400,
-            EMPTY_ADDRESS
-        );
-
-        (bytes memory encodedName, bytes32 testnameNamehash) = NameEncoder
-            .dnsEncodeName(name);
-        wrapper.setSubnodeOwner(
+        setupState(
             testnameNamehash,
-            sublabel,
-            bob,
+            parentLabel,
+            childLabel,
+            CAN_DO_EVERYTHING,
             CAN_DO_EVERYTHING,
             0
         );
 
         assertEq(baseRegistrar.ownerOf(labelHash), address(wrapper));
         assertEq(wrapper.ownerOf(uint256(testnameNamehash)), alice);
-        vm.warp(block.timestamp +  63113904);
+        vm.warp(block.timestamp + 63113904);
         wrapper.safeTransferFrom(alice, bob, uint256(testnameNamehash), 1, "");
-        assertEq(wrapper.ownerOf(uint256(testnameNamehash)), bob);
+        // The transfer should not happen to Bob if expired
+        assertEq(wrapper.ownerOf(uint256(testnameNamehash)), EMPTY_ADDRESS);
         vm.stopPrank();
     }
 
+    function testWrappedExpired() public {
+        // "0000 - Wrapped expired without CU/PCC burned, Parent's CU not burned"
+        string memory parentLabel = "testname";
+        string memory childLabel = "sub";
+        string memory name = string(abi.encodePacked(parentLabel, ".eth"));
+        (, bytes32 parentNode) = NameEncoder.dnsEncodeName(name);
+
+        wrapper.setController(alice, true);
+        baseRegistrar.addController(alice);
+
+        vm.startPrank(alice);
+        baseRegistrar.setApprovalForAll(address(wrapper), true);
+
+        setupState0000DW(parentNode, parentLabel, childLabel);
+
+        (, bytes32 childNode) = NameEncoder.dnsEncodeName("sub.testname.eth");
+        ownerIsOwnerWhenExpired(childNode);
+        vm.stopPrank();
+    }
+
+    function ownerIsOwnerWhenExpired(bytes32 childNode) private {
+        (, uint32 expiry,) = wrapper.getData(uint256(childNode));
+        assertLt(expiry, block.timestamp);
+        assertEq(wrapper.ownerOf(uint256(childNode)), bob);
+    }
+
+    function ownerResetsToZeroWhenExpired(bytes32 childNode, uint32 fuses) private {
+      (address ownerBefore, uint32 fusesBefore, uint64 expiryBefore) = wrapper.getData(uint256(childNode));
+      assertEq(ownerBefore, bob);
+
+      // not expired
+      assertEq(expiryBefore, block.timestamp);
+      assertEq(fusesBefore, fuses);
+      // force expiry
+      vm.warp(84600 * 2);
+      (address ownerAfter, uint32 fusesAfter, uint64 expiryAfter) = wrapper.getData(
+        uint256(childNode)
+      );
+
+      // owner and fuses are reset when expired
+      assertEq(ownerAfter, EMPTY_ADDRESS);
+      assertEq(expiryAfter, block.timestamp);
+      assertEq(fusesAfter, 0);
+  }
+
     function labelhash(string memory name) private pure returns (bytes32) {
         return keccak256(bytes(name));
+    }
+
+    function setupState(
+        bytes32 parentNode,
+        string memory parentLabel,
+        string memory childLabel,
+        uint32 parentFuses,
+        uint32 childFuses,
+        uint64 childExpiry
+    ) private {
+        assertEq(
+            baseRegistrar.available(uint256(labelhash(parentLabel))),
+            true
+        );
+        baseRegistrar.register(uint256(labelhash(parentLabel)), alice, 84600);
+        assertEq(
+            baseRegistrar.ownerOf(uint256(labelhash(parentLabel))),
+            address(alice)
+        );
+        wrapper.wrapETH2LD(
+            parentLabel,
+            alice,
+            uint16(parentFuses),
+            EMPTY_ADDRESS
+        );
+        wrapper.setSubnodeOwner(
+            parentNode,
+            childLabel,
+            bob,
+            childFuses,
+            childExpiry
+        );
+    }
+
+    function setupState0000DW(
+        bytes32 parentNode,
+        string memory parentLabel,
+        string memory childLabel
+    ) private {
+        // Expired, nothing burnt.
+        setupState(
+            parentNode,
+            parentLabel,
+            childLabel,
+            CAN_DO_EVERYTHING,
+            CAN_DO_EVERYTHING,
+            0
+        );
+        (, uint32 parentFuses, ) = wrapper.getData(uint256(parentNode));
+        assertEq(parentFuses, PARENT_CANNOT_CONTROL | IS_DOT_ETH);
+        (, bytes32 childNode) = NameEncoder.dnsEncodeName("sub.testname.eth");
+        (, uint32 childFuses, uint64 childExpiry) = wrapper.getData(
+            uint256(childNode)
+        );
+        assertEq(childFuses, CAN_DO_EVERYTHING);
+        assertEq(childExpiry, 0);
     }
 }
