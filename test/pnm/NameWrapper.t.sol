@@ -112,7 +112,7 @@ contract NameWrapperTest is PTest {
         assertEq(wrapper.ownerOf(uint256(xyzNamehash)), alice);
     }
 
-    function testSubdomainExtendAfter2LDExpired(uint64 timestamp) external {
+    function actionSubdomainExtendAfter2LDExpired(uint64 timestamp) external {
         // Invariant:
         // Subdomain should not be transferable if parent domain is expired.
         vm.assume(timestamp > block.timestamp + 63113904);
