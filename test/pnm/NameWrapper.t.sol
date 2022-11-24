@@ -164,11 +164,6 @@ contract NameWrapperTest is PTest {
             childFuse,
             timestamp
         );
-
-        (, bytes32 childNode) = NameEncoder.dnsEncodeName(
-            string(abi.encodePacked(childLabel, ".", name))
-        );
-        ownerIsOwnerWhenExpired(childNode);
     }
 
     function invariantTestWrappedExpired() private {
