@@ -171,7 +171,7 @@ contract NameWrapperTest is PTest {
         ownerIsOwnerWhenExpired(childNode);
     }
 
-    function invariantOwnerIsOwnerWhenExpired() private {
+    function invariantTestWrappedExpired() private {
         string memory parentLabel = "testname";
         string memory childLabel = "sub";
         string memory name = string(abi.encodePacked(parentLabel, ".eth"));
