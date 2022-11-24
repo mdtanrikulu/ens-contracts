@@ -146,15 +146,35 @@ contract NameWrapperTest is PTest {
         assert(wrapper.ownerOf(uint256(testnameNamehash)) == EMPTY_ADDRESS);
     }
 
-    function testWrappedExpired() public {
-        // "0000 - Wrapped expired without CU/PCC burned, Parent's CU not burned"
+    function actionTestWrappedExpired(uint16 parentFuse, uint16 childFuse, uint64 timestamp) public {
+        vm.assume(isPowerOfTwo(parentFuse) && parentFuse <= 64);
+        vm.assume(isPowerOfTwo(childFuse) && childFuse <= 64);
+        vm.assume(timestamp >= 0);
+
         string memory parentLabel = "testname";
         string memory childLabel = "sub";
         string memory name = string(abi.encodePacked(parentLabel, ".eth"));
         (, bytes32 parentNode) = NameEncoder.dnsEncodeName(name);
 
-        setupState0000DW(parentNode, parentLabel, childLabel);
+        setupState(
+            parentNode,
+            parentLabel,
+            childLabel,
+            parentFuse,
+            childFuse,
+            timestamp
+        );
 
+        (, bytes32 childNode) = NameEncoder.dnsEncodeName(
+            string(abi.encodePacked(childLabel, ".", name))
+        );
+        ownerIsOwnerWhenExpired(childNode);
+    }
+
+    function invariantOwnerIsOwnerWhenExpired() private {
+        string memory parentLabel = "testname";
+        string memory childLabel = "sub";
+        string memory name = string(abi.encodePacked(parentLabel, ".eth"));
         (, bytes32 childNode) = NameEncoder.dnsEncodeName(
             string(abi.encodePacked(childLabel, ".", name))
         );
@@ -192,6 +212,11 @@ contract NameWrapperTest is PTest {
         return keccak256(bytes(name));
     }
 
+    function isPowerOfTwo(uint256 x) private pure returns (bool) {
+        if (x < 0) return false;
+        return (x & (x-1)) == 0;
+    }
+
     function setupState(
         bytes32 parentNode,
         string memory parentLabel,
@@ -227,7 +252,8 @@ contract NameWrapperTest is PTest {
     function setupState0000DW(
         bytes32 parentNode,
         string memory parentLabel,
-        string memory childLabel
+        string memory childLabel,
+        uint16[] memory fuses
     ) private {
         // Expired, nothing burnt.
         setupState(
