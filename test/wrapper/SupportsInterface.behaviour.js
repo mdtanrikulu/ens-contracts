@@ -56,7 +56,7 @@ const INTERFACES = {
     'wrap(bytes,address,address)',
     'wrapETH2LD(string,address,uint16,address)',
     'registerAndWrapETH2LD(string,address,uint256,address,uint16)',
-    'renew(uint256,uint256,uint16)',
+    'renew(uint256,uint256)',
     'unwrap(bytes32,bytes32,address)',
     'unwrapETH2LD(bytes32,address,address)',
     'setFuses(bytes32,uint16)',
@@ -64,13 +64,12 @@ const INTERFACES = {
     'setSubnodeRecord(bytes32,string,address,address,uint64,uint32,uint64)',
     'setRecord(bytes32,address,address,uint64)',
     'setSubnodeOwner(bytes32,string,address,uint32,uint64)',
-    'isTokenOwnerOrApproved(bytes32,address)',
+    'canModifyName(bytes32,address)',
     'setResolver(bytes32,address)',
     'setTTL(bytes32,uint64)',
     'getData(uint256)',
     'ownerOf(uint256)',
     'allFusesBurned(bytes32,uint32)',
-    'isWrapped(bytes32)',
   ],
 }
 
