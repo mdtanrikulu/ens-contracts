@@ -90,12 +90,12 @@ contract NameWrapperTest is PTest {
         // controller = IETHRegistrarController(ensReg);
     }
 
-    function testOwnership() public {
+    function invariantOwnership() public {
         (, bytes32 ethNamehash) = NameEncoder.dnsEncodeName("eth");
         assertEq(wrapper.ownerOf(uint256(ethNamehash)), EMPTY_ADDRESS);
     }
 
-    function testWrap() public {
+    function invariantWrap() public {
         (bytes memory encodedName, bytes32 xyzNamehash) = NameEncoder
             .dnsEncodeName("xyz");
         assertEq(wrapper.ownerOf(uint256(xyzNamehash)), EMPTY_ADDRESS);
@@ -104,7 +104,7 @@ contract NameWrapperTest is PTest {
         assertEq(wrapper.ownerOf(uint256(xyzNamehash)), alice);
     }
 
-    function testAllowResolver() public {
+    function invariantAllowResolver() public {
         (bytes memory encodedName, bytes32 xyzNamehash) = NameEncoder
             .dnsEncodeName("xyz");
         registry.setApprovalForAll(address(wrapper), true);
@@ -112,7 +112,7 @@ contract NameWrapperTest is PTest {
         assertEq(wrapper.ownerOf(uint256(xyzNamehash)), alice);
     }
 
-    function actionSubdomainExtendAfter2LDExpired(uint64 timestamp) external {
+    function testSubdomainExtendAfter2LDExpired(uint64 timestamp) external {
         // Invariant:
         // Subdomain should not be transferable if parent domain is expired.
         vm.assume(timestamp > block.timestamp + 63113904);
@@ -146,7 +146,7 @@ contract NameWrapperTest is PTest {
         assert(wrapper.ownerOf(uint256(testnameNamehash)) == EMPTY_ADDRESS);
     }
 
-    function actionTestWrappedExpired(
+    function testWrappedExpired(
         uint16 parentFuse,
         uint16 childFuse,
         uint64 timestamp
@@ -175,7 +175,7 @@ contract NameWrapperTest is PTest {
         ownerIsOwnerWhenExpired(childNode);
     }
 
-    function invariantTestWrappedExpired() private {
+    function invariantTestWrappedExpired() public {
         string memory parentLabel = "testname";
         string memory childLabel = "sub";
         string memory name = string(abi.encodePacked(parentLabel, ".eth"));
