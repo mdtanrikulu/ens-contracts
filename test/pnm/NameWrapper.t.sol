@@ -217,7 +217,7 @@ contract NameWrapperTest is PTest {
     }
 
     function isPowerOfTwo(uint256 x) private pure returns (bool) {
-        if (x < 0) return false;
+        if (x <= 0) return false;
         return (x & (x - 1)) == 0;
     }
 
