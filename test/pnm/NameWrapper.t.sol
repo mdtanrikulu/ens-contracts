@@ -135,6 +135,7 @@ contract NameWrapperTest is PTest {
         assertEq(wrapper.ownerOf(uint256(testnameNamehash)), alice);
         // vm.warp(block.timestamp + 63113904);
         vm.warp(timestamp);
+        vm.expectRevert(bytes("ERC1155: insufficient balance for transfer"));
         wrapper.safeTransferFrom(alice, bob, uint256(testnameNamehash), 1, "");
     }
 
@@ -151,8 +152,22 @@ contract NameWrapperTest is PTest {
         uint16 childFuse,
         uint64 timestamp
     ) public {
-        vm.assume(isPowerOfTwo(parentFuse) && parentFuse <= 64);
-        vm.assume(isPowerOfTwo(childFuse) && childFuse <= 64);
+        vm.assume(
+            parentFuse == CAN_DO_EVERYTHING ||
+                (isPowerOfTwo(parentFuse) && parentFuse <= 32) ||
+                parentFuse == PARENT_CANNOT_CONTROL ||
+                parentFuse == IS_DOT_ETH ||
+                parentFuse == PARENT_CONTROLLED_FUSES ||
+                parentFuse == USER_SETTABLE_FUSES
+        );
+        vm.assume(
+            childFuse == CAN_DO_EVERYTHING ||
+                (isPowerOfTwo(childFuse) && childFuse <= 32) ||
+                childFuse == PARENT_CANNOT_CONTROL ||
+                childFuse == IS_DOT_ETH ||
+                childFuse == PARENT_CONTROLLED_FUSES ||
+                childFuse == USER_SETTABLE_FUSES
+        );
         vm.assume(timestamp >= 0);
 
         string memory parentLabel = "testname";
