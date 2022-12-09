@@ -148,27 +148,17 @@ contract NameWrapperTest is PTest {
     }
 
     function testWrappedExpired(
-        uint16 parentFuse,
         uint16 childFuse,
         uint64 timestamp
     ) public {
         vm.assume(
-            parentFuse == CAN_DO_EVERYTHING ||
-                (isPowerOfTwo(parentFuse) && parentFuse <= 32) ||
-                parentFuse == PARENT_CANNOT_CONTROL ||
-                parentFuse == IS_DOT_ETH ||
-                parentFuse == PARENT_CONTROLLED_FUSES ||
-                parentFuse == USER_SETTABLE_FUSES
-        );
-        vm.assume(
-            childFuse == CAN_DO_EVERYTHING ||
-                (isPowerOfTwo(childFuse) && childFuse <= 32) ||
+                (childFuse > 2 && isPowerOfTwo(childFuse) && childFuse <= 32) ||
                 childFuse == PARENT_CANNOT_CONTROL ||
                 childFuse == IS_DOT_ETH ||
                 childFuse == PARENT_CONTROLLED_FUSES ||
                 childFuse == USER_SETTABLE_FUSES
         );
-        vm.assume(timestamp >= 0);
+        vm.assume(timestamp >= 0); // > 7776090
 
         string memory parentLabel = "testname";
         string memory childLabel = "sub";
@@ -179,15 +169,19 @@ contract NameWrapperTest is PTest {
             parentNode,
             parentLabel,
             childLabel,
-            parentFuse,
-            childFuse,
+            PARENT_CANNOT_CONTROL | CANNOT_UNWRAP,
+            PARENT_CANNOT_CONTROL | CANNOT_UNWRAP | childFuse,
             timestamp
         );
 
         (, bytes32 childNode) = NameEncoder.dnsEncodeName(
             string(abi.encodePacked(childLabel, ".", name))
         );
-        ownerIsOwnerWhenExpired(childNode);
+        if (timestamp <= 7776090) {
+            ownerIsOwnerWhenExpired(childNode, EMPTY_ADDRESS);
+        } else {
+            ownerIsOwnerWhenExpired(childNode, bob);
+        }
     }
 
     function invariantTestWrappedExpired() public {
@@ -197,13 +191,13 @@ contract NameWrapperTest is PTest {
         (, bytes32 childNode) = NameEncoder.dnsEncodeName(
             string(abi.encodePacked(childLabel, ".", name))
         );
-        ownerIsOwnerWhenExpired(childNode);
+        ownerIsOwnerWhenExpired(childNode, EMPTY_ADDRESS);
     }
 
-    function ownerIsOwnerWhenExpired(bytes32 childNode) private {
+    function ownerIsOwnerWhenExpired(bytes32 childNode, address owner) private {
         (, uint32 expiry, ) = wrapper.getData(uint256(childNode));
         assertLt(expiry, block.timestamp);
-        assertEq(wrapper.ownerOf(uint256(childNode)), bob);
+        assertEq(wrapper.ownerOf(uint256(childNode)), owner);
     }
 
     function ownerResetsToZeroWhenExpired(bytes32 childNode, uint32 fuses)
