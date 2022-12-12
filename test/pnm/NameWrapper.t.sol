@@ -158,7 +158,7 @@ contract NameWrapperTest is PTest {
                 childFuse == PARENT_CONTROLLED_FUSES ||
                 childFuse == USER_SETTABLE_FUSES
         );
-        vm.assume(timestamp >= 0); // > 7776090
+        vm.assume(timestamp > 7776090); // from setup warp
 
         string memory parentLabel = "testname";
         string memory childLabel = "sub";
@@ -177,11 +177,9 @@ contract NameWrapperTest is PTest {
         (, bytes32 childNode) = NameEncoder.dnsEncodeName(
             string(abi.encodePacked(childLabel, ".", name))
         );
-        if (timestamp <= 7776090) {
-            ownerIsOwnerWhenExpired(childNode, EMPTY_ADDRESS);
-        } else {
-            ownerIsOwnerWhenExpired(childNode, bob);
-        }
+
+        ownerIsOwnerWhenExpired(childNode, bob);
+        ownerResetsToZeroWhenExpired(childNode, PARENT_CANNOT_CONTROL | CANNOT_UNWRAP | childFuse);
     }
 
     function invariantTestWrappedExpired() public {
@@ -208,16 +206,16 @@ contract NameWrapperTest is PTest {
         assertEq(ownerBefore, bob);
 
         // not expired
-        assertEq(expiryBefore, block.timestamp);
+        assertGe(expiryBefore, block.timestamp);
         assertEq(fusesBefore, fuses);
         // force expiry
-        vm.warp(84600 * 2);
+        vm.warp(expiryBefore + 1);
         (address ownerAfter, uint32 fusesAfter, uint64 expiryAfter) = wrapper
             .getData(uint256(childNode));
 
         // owner and fuses are reset when expired
         assertEq(ownerAfter, EMPTY_ADDRESS);
-        assertEq(expiryAfter, block.timestamp);
+        assertLt(expiryAfter, block.timestamp);
         assertEq(fusesAfter, 0);
     }
 
