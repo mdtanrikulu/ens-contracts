@@ -15,6 +15,11 @@ import {ReverseRegistrar} from "../../contracts/registry/ReverseRegistrar.sol";
 import {AggregatorInterface, StablePriceOracle} from "../../contracts/ethregistrar/StablePriceOracle.sol";
 import {ETHRegistrarController, IETHRegistrarController} from "../../contracts/ethregistrar/ETHRegistrarController.sol";
 
+// Invariant 1:  ownership of root domains
+// Invariant 2:  ownership of root domains in wrapper after wrap
+// Invariant 3:  resolver address of wrapped name
+// Invariant 4:  fuses of frozen 2LD
+
 contract NameWrapperTest is PTest {
     NameWrapper public wrapper;
     ENSRegistry public registry;
@@ -29,10 +34,19 @@ contract NameWrapperTest is PTest {
     address EMPTY_ADDRESS = 0x0000000000000000000000000000000000000000;
     bytes32 ROOT_NODE =
         0x0000000000000000000000000000000000000000000000000000000000000000;
+    uint256 CONTRACT_INIT_TIMESTAMP = 7776000 + 90 + 1;
+
+    event NameWrapped(
+        bytes32 indexed node,
+        bytes name,
+        address owner,
+        uint32 fuses,
+        uint64 expiry
+    );
 
     function setUp() public {
         // warp beyond expire + grace period
-        vm.warp(7776000 + 90 + 1);
+        vm.warp(CONTRACT_INIT_TIMESTAMP);
 
         agent = getAgent();
         registry = new ENSRegistry();
@@ -109,11 +123,10 @@ contract NameWrapperTest is PTest {
             .dnsEncodeName("xyz");
         registry.setApprovalForAll(address(wrapper), true);
         wrapper.wrap(encodedName, alice, bob);
-        assertEq(wrapper.ownerOf(uint256(xyzNamehash)), alice);
+        assertEq(registry.resolver(xyzNamehash), bob);
     }
 
     function testSubdomainExtendAfter2LDExpired(uint64 timestamp) external {
-        // Invariant:
         // Subdomain should not be transferable if parent domain is expired.
         vm.assume(timestamp > block.timestamp + 63113904);
         string memory parentLabel = "testname";
@@ -135,30 +148,31 @@ contract NameWrapperTest is PTest {
         assertEq(wrapper.ownerOf(uint256(testnameNamehash)), alice);
         // vm.warp(block.timestamp + 63113904);
         vm.warp(timestamp);
+
+        vm.expectRevert();
+        wrapper.renew(uint256(testnameNamehash), 86400);
+
         vm.expectRevert(bytes("ERC1155: insufficient balance for transfer"));
         wrapper.safeTransferFrom(alice, bob, uint256(testnameNamehash), 1, "");
+
+        assertEq(wrapper.ownerOf(uint256(testnameNamehash)), EMPTY_ADDRESS);
     }
 
     function invariantSubdomainExtendAfter2LDExpired() external view {
-        // The transfer should not happen to Bob if expired
         string memory parentLabel = "testname";
         string memory name = string(abi.encodePacked(parentLabel, ".eth"));
         (, bytes32 testnameNamehash) = NameEncoder.dnsEncodeName(name);
         assert(wrapper.ownerOf(uint256(testnameNamehash)) == EMPTY_ADDRESS);
     }
 
-    function testWrappedExpired(
-        uint16 childFuse,
-        uint64 timestamp
-    ) public {
+    function testWrappedChildExpired(uint16 childFuse, uint64 timestamp) public {
         vm.assume(
-                (childFuse > 2 && isPowerOfTwo(childFuse) && childFuse <= 32) ||
+            (isPowerOfTwo(childFuse) && childFuse <= 32) ||
                 childFuse == PARENT_CANNOT_CONTROL ||
-                childFuse == IS_DOT_ETH ||
                 childFuse == PARENT_CONTROLLED_FUSES ||
                 childFuse == USER_SETTABLE_FUSES
         );
-        vm.assume(timestamp > 7776090); // from setup warp
+        vm.assume(timestamp > CONTRACT_INIT_TIMESTAMP); // from setup warp
 
         string memory parentLabel = "testname";
         string memory childLabel = "sub";
@@ -178,21 +192,92 @@ contract NameWrapperTest is PTest {
             string(abi.encodePacked(childLabel, ".", name))
         );
 
-        ownerIsOwnerWhenExpired(childNode, bob);
-        ownerResetsToZeroWhenExpired(childNode, PARENT_CANNOT_CONTROL | CANNOT_UNWRAP | childFuse);
+        ownerIsOwner(childNode, bob);
+        ownerResetsToZeroWhenExpired(
+            childNode,
+            PARENT_CANNOT_CONTROL | CANNOT_UNWRAP | childFuse
+        );
     }
 
-    function invariantTestWrappedExpired() public {
+    function invariantTestWrappedChildExpired() public {
         string memory parentLabel = "testname";
         string memory childLabel = "sub";
         string memory name = string(abi.encodePacked(parentLabel, ".eth"));
         (, bytes32 childNode) = NameEncoder.dnsEncodeName(
             string(abi.encodePacked(childLabel, ".", name))
         );
-        ownerIsOwnerWhenExpired(childNode, EMPTY_ADDRESS);
+        ownerIsOwner(childNode, EMPTY_ADDRESS);
     }
 
-    function ownerIsOwnerWhenExpired(bytes32 childNode, address owner) private {
+    // function invariantEmitWrapEvent() public {
+    //     string memory parentLabel = "testname";
+    //     string memory childLabel = "sub2";
+    //     string memory name = string(abi.encodePacked(parentLabel, ".eth"));
+    //     (, bytes32 parentNode) = NameEncoder.dnsEncodeName(name);
+
+    //     vm.expectEmit(true, true, false, true);
+    //     emit NameWrapped(parentNode, bytes(name), alice, 0, 84600);
+
+    //     setupState(
+    //         parentNode,
+    //         parentLabel,
+    //         childLabel,
+    //         0,
+    //         0,
+    //         0
+    //     );
+    // }
+
+    function testWrap_CANNOT_BURN(uint32 parentFuse, uint32 childFuse) public {
+        vm.assume(
+            (isPowerOfTwo(parentFuse) && parentFuse <= 32)
+        );
+        vm.assume(
+            (isPowerOfTwo(childFuse) && childFuse <= 32)
+        );
+        string memory parentLabel = "testname";
+        string memory childLabel = "sub5";
+        string memory name = string(abi.encodePacked(parentLabel, ".eth"));
+        (, bytes32 parentNode) = NameEncoder.dnsEncodeName(name);
+        (, bytes32 childNode) = NameEncoder.dnsEncodeName(
+            string(abi.encodePacked(childLabel, ".", name))
+        );
+
+        setupState(
+            parentNode,
+            parentLabel,
+            childLabel,
+            PARENT_CANNOT_CONTROL | CANNOT_UNWRAP | CANNOT_BURN_FUSES,
+            PARENT_CANNOT_CONTROL | CANNOT_UNWRAP | CANNOT_BURN_FUSES,
+            uint64(CONTRACT_INIT_TIMESTAMP) + 86400
+        );
+
+        vm.warp(CONTRACT_INIT_TIMESTAMP + 1);
+
+        (, uint32 parentFusesBefore,) = wrapper
+            .getData(uint256(parentNode));
+        assertEq(parentFusesBefore, PARENT_CANNOT_CONTROL | CANNOT_UNWRAP | CANNOT_BURN_FUSES | IS_DOT_ETH);
+
+        vm.expectRevert();
+        wrapper.setFuses(parentNode, uint16(parentFuse));
+
+        (, uint32 parentFusesAfter,) = wrapper
+            .getData(uint256(parentNode));
+        assertEq(parentFusesAfter, PARENT_CANNOT_CONTROL | CANNOT_UNWRAP | CANNOT_BURN_FUSES | IS_DOT_ETH);
+        
+        (, uint32 childFusesBefore,) = wrapper
+            .getData(uint256(childNode));
+        assertEq(childFusesBefore, PARENT_CANNOT_CONTROL | CANNOT_UNWRAP | CANNOT_BURN_FUSES);
+
+        vm.expectRevert();
+        wrapper.setFuses(childNode, uint16(childFuse));
+
+        (, uint32 childFusesAfter,) = wrapper
+            .getData(uint256(childNode));
+        assertEq(childFusesAfter, PARENT_CANNOT_CONTROL | CANNOT_UNWRAP | CANNOT_BURN_FUSES);
+    }
+
+    function ownerIsOwner(bytes32 childNode, address owner) private {
         (, uint32 expiry, ) = wrapper.getData(uint256(childNode));
         assertLt(expiry, block.timestamp);
         assertEq(wrapper.ownerOf(uint256(childNode)), owner);
@@ -258,32 +343,5 @@ contract NameWrapperTest is PTest {
             childFuses,
             childExpiry
         );
-    }
-
-    function setupState0000DW(
-        bytes32 parentNode,
-        string memory parentLabel,
-        string memory childLabel,
-        uint16[] memory fuses
-    ) private {
-        // Expired, nothing burnt.
-        setupState(
-            parentNode,
-            parentLabel,
-            childLabel,
-            CAN_DO_EVERYTHING,
-            CAN_DO_EVERYTHING,
-            0
-        );
-        (, uint32 parentFuses, ) = wrapper.getData(uint256(parentNode));
-        assertEq(parentFuses, PARENT_CANNOT_CONTROL | IS_DOT_ETH);
-        (, bytes32 childNode) = NameEncoder.dnsEncodeName(
-            string(abi.encodePacked(childLabel, ".", parentLabel, ".eth"))
-        );
-        (, uint32 childFuses, uint64 childExpiry) = wrapper.getData(
-            uint256(childNode)
-        );
-        assertEq(childFuses, CAN_DO_EVERYTHING);
-        assertEq(childExpiry, 0);
     }
 }
