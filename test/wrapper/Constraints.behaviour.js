@@ -33,7 +33,8 @@ const {
   IS_DOT_ETH,
 } = FUSES
 
-const DAY = 84600
+const DAY = 86400
+const GRACE_PERIOD = 90 * DAY
 
 function shouldRespectConstraints(contracts, getSigners) {
   let account
@@ -161,7 +162,7 @@ function shouldRespectConstraints(contracts, getSigners) {
     expect(parentFuses).to.equal(PARENT_CANNOT_CONTROL | IS_DOT_ETH)
     const [, childFuses, childExpiry] = await NameWrapper.getData(childNode)
     expect(childFuses).to.equal(CAN_DO_EVERYTHING)
-    expect(childExpiry).to.equal(parentExpiry - 86400)
+    expect(childExpiry).to.equal(parentExpiry - 86400 - GRACE_PERIOD)
   }
 
   async function setupState1001NE_PCU({ parentNode, parentLabel, childLabel }) {
@@ -179,7 +180,7 @@ function shouldRespectConstraints(contracts, getSigners) {
     )
     const [, childFuses, childExpiry] = await NameWrapper.getData(childNode)
     expect(childFuses).to.equal(CAN_DO_EVERYTHING)
-    expect(childExpiry).to.equal(parentExpiry - 86400)
+    expect(childExpiry).to.equal(parentExpiry - 86400 - GRACE_PERIOD)
   }
 
   async function setupState1011NE_PCC_PCU({
@@ -201,7 +202,7 @@ function shouldRespectConstraints(contracts, getSigners) {
     )
     const [, childFuses, childExpiry] = await NameWrapper.getData(childNode)
     expect(childFuses).to.equal(PARENT_CANNOT_CONTROL)
-    expect(childExpiry).to.equal(parentExpiry - 86400)
+    expect(childExpiry).to.equal(parentExpiry - 86400 - GRACE_PERIOD)
   }
 
   async function setupState1111NE_CU_PCC_PCU({
@@ -223,7 +224,7 @@ function shouldRespectConstraints(contracts, getSigners) {
     )
     const [, childFuses, childExpiry] = await NameWrapper.getData(childNode)
     expect(childFuses).to.equal(PARENT_CANNOT_CONTROL | CANNOT_UNWRAP)
-    expect(childExpiry).to.equal(parentExpiry - 86400)
+    expect(childExpiry).to.equal(parentExpiry - 86400 - GRACE_PERIOD)
   }
 
   // Reusable tests
@@ -257,7 +258,7 @@ function shouldRespectConstraints(contracts, getSigners) {
       const parentExpiry = await BaseRegistrar.nameExpires(labelhash('test1'))
       await NameWrapper.setChildFuses(parentNode, childLabelHash, 0, MAX_EXPIRY)
       const [, , expiry] = await NameWrapper.getData(childNode)
-      expect(expiry).to.be.bignumber.equal(parentExpiry)
+      expect(expiry).to.be.bignumber.equal(parentExpiry.add(GRACE_PERIOD))
     })
 
     it('Parent can extend expiry with setSubnodeOwner()', async () => {
@@ -270,7 +271,7 @@ function shouldRespectConstraints(contracts, getSigners) {
         MAX_EXPIRY,
       )
       const [, , expiry] = await NameWrapper.getData(childNode)
-      expect(expiry).to.be.bignumber.equal(parentExpiry)
+      expect(expiry).to.be.bignumber.equal(parentExpiry.add(GRACE_PERIOD))
     })
 
     it('Parent can extend expiry with setSubnodeRecord()', async () => {
@@ -285,7 +286,7 @@ function shouldRespectConstraints(contracts, getSigners) {
         MAX_EXPIRY,
       )
       const [, , expiry] = await NameWrapper.getData(childNode)
-      expect(expiry).to.be.bignumber.equal(parentExpiry)
+      expect(expiry).to.be.bignumber.equal(parentExpiry.add(GRACE_PERIOD))
     })
   }
 
@@ -308,7 +309,7 @@ function shouldRespectConstraints(contracts, getSigners) {
       const parentExpiry = await BaseRegistrar.nameExpires(labelhash('test1'))
       await NameWrapper.setChildFuses(parentNode, childLabelHash, 0, MAX_EXPIRY)
       const [, , expiry] = await NameWrapper.getData(childNode)
-      expect(expiry).to.be.bignumber.equal(parentExpiry)
+      expect(expiry).to.be.bignumber.equal(parentExpiry.add(GRACE_PERIOD))
     })
 
     it('Parent cannot extend expiry with setSubnodeOwner()', async () => {
@@ -1122,7 +1123,7 @@ function shouldRespectConstraints(contracts, getSigners) {
         0,
       )
 
-      const [, fuses, expiry] = await NameWrapper.getData(childNode)
+      const [, fuses] = await NameWrapper.getData(childNode)
       expect(fuses).to.equal(0)
     })
   })

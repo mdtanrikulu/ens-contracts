@@ -115,7 +115,7 @@ contract ETHRegistrarController is
         address resolver,
         bytes[] calldata data,
         bool reverseRecord,
-        uint32 fuses
+        uint16 ownerControlledFuses
     ) public pure override returns (bytes32) {
         bytes32 label = keccak256(bytes(name));
         if (data.length > 0 && resolver == address(0)) {
@@ -131,7 +131,7 @@ contract ETHRegistrarController is
                     resolver,
                     data,
                     reverseRecord,
-                    fuses
+                    ownerControlledFuses
                 )
             );
     }
@@ -151,7 +151,7 @@ contract ETHRegistrarController is
         address resolver,
         bytes[] calldata data,
         bool reverseRecord,
-        uint32 fuses
+        uint16 ownerControlledFuses
     ) public payable override {
         IPriceOracle.Price memory price = rentPrice(name, duration);
         if (msg.value < price.base + price.premium) {
@@ -169,7 +169,7 @@ contract ETHRegistrarController is
                 resolver,
                 data,
                 reverseRecord,
-                fuses
+                ownerControlledFuses
             )
         );
 
@@ -178,7 +178,7 @@ contract ETHRegistrarController is
             owner,
             duration,
             resolver,
-            fuses
+            ownerControlledFuses
         );
 
         if (data.length > 0) {
@@ -210,34 +210,16 @@ contract ETHRegistrarController is
         payable
         override
     {
-        _renew(name, duration, 0);
-    }
-
-    function renewWithFuses(
-        string calldata name,
-        uint256 duration,
-        uint32 fuses
-    ) external payable {
-        bytes32 labelhash = keccak256(bytes(name));
-        bytes32 nodehash = keccak256(abi.encodePacked(ETH_NODE, labelhash));
-        if (!nameWrapper.isTokenOwnerOrApproved(nodehash, msg.sender)) {
-            revert Unauthorised(nodehash);
-        }
-        _renew(name, duration, fuses);
-    }
-
-    function _renew(
-        string calldata name,
-        uint256 duration,
-        uint32 fuses
-    ) internal {
         bytes32 labelhash = keccak256(bytes(name));
         uint256 tokenId = uint256(labelhash);
         IPriceOracle.Price memory price = rentPrice(name, duration);
         if (msg.value < price.base) {
             revert InsufficientValue();
         }
-        uint256 expires = nameWrapper.renew(tokenId, duration, fuses);
+        uint256 expires = nameWrapper.renew(
+            tokenId,
+            duration
+        );
 
         if (msg.value > price.base) {
             payable(msg.sender).transfer(msg.value - price.base);
