@@ -27,8 +27,8 @@ contract NameWrapperTest is PTest {
     IETHRegistrarController public controller;
     BaseRegistrarImplementation public baseRegistrar;
 
-    address alice = vm.addr(1);
-    address bob = vm.addr(2);
+    address alice;
+    address bob;
     address agent;
 
     address EMPTY_ADDRESS = 0x0000000000000000000000000000000000000000;
@@ -45,6 +45,9 @@ contract NameWrapperTest is PTest {
     );
 
     function setUp() public {
+	alice = makeAddr("Alice");
+	bob = makeAddr("Bob");
+
         // warp beyond expire + grace period
         vm.warp(CONTRACT_INIT_TIMESTAMP);
 
