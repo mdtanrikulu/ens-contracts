@@ -9,3 +9,4 @@ build
 forge-cache
 out
 deploy
+lcov.info
