@@ -454,7 +454,7 @@ contract NameWrapperTest is PTest {
         string memory label = "resolvertest";
         bytes32 tokenId = namehash(label);
 
-        registerSetupAndWrapName(label, alice, parentFuse, timestamp);
+        registerSetupAndWrapName(label, alice, CANNOT_UNWRAP | parentFuse, timestamp);
         wrapper.setResolver(tokenId, MOCK_RESOLVER);
         assertEq(registry.resolver(tokenId), MOCK_RESOLVER);
     }
