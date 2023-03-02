@@ -8,7 +8,7 @@ import "../../contracts/wrapper/StaticMetadataService.sol";
 import "../../contracts/wrapper/IMetadataService.sol";
 import "../../contracts/wrapper/NameWrapper.sol";
 
-import {IncompatibleParent, IncorrectTargetOwner} from "../../contracts/wrapper/NameWrapper.sol";
+import {IncompatibleParent, IncorrectTargetOwner, OperationProhibited, Unauthorised} from "../../contracts/wrapper/NameWrapper.sol";
 import {CANNOT_UNWRAP, CANNOT_BURN_FUSES, CANNOT_TRANSFER, CANNOT_SET_RESOLVER, CANNOT_SET_TTL, CANNOT_CREATE_SUBDOMAIN, PARENT_CANNOT_CONTROL, CAN_DO_EVERYTHING} from "../../contracts/wrapper/INameWrapper.sol";
 import {NameEncoder} from "../../contracts/utils/NameEncoder.sol";
 import {ReverseRegistrar} from "../../contracts/registry/ReverseRegistrar.sol";
@@ -181,7 +181,7 @@ contract NameWrapperTest is PTest {
 
         vm.warp(timestamp);
 
-        vm.expectRevert();
+        vm.expectRevert(); // cannot renew if expired
         wrapper.renew(uint256(testnameNamehash), 86400);
 
         vm.expectRevert(bytes("ERC1155: insufficient balance for transfer"));
@@ -196,8 +196,8 @@ contract NameWrapperTest is PTest {
         uint64 timestamp
     ) public {
         // subdomain owner should be reset to zero when expired
-        vm.assume(filterFuses(parentFuse, CANNOT_CREATE_SUBDOMAIN));
-        vm.assume(filterFuses(childFuse, 0));
+        vm.assume(filterFuses(parentFuse)); // CANNOT_CREATE_SUBDOMAIN
+        vm.assume(filterFuses(childFuse));
         vm.assume(timestamp > CONTRACT_INIT_TIMESTAMP); // from setup warp
 
         string memory parentLabel = "testname";
@@ -205,21 +205,50 @@ contract NameWrapperTest is PTest {
         string memory name = string(abi.encodePacked(parentLabel, ".eth"));
         bytes32 parentNode = namehash(parentLabel);
 
+        if ((parentFuse == 0 && childFuse == 0)) return;
+
+        if (fuseForbidden(parentFuse, CANNOT_CREATE_SUBDOMAIN)) {
+            assertEq(
+                baseRegistrar.available(uint256(labelhash(parentLabel))),
+                true
+            );
+            baseRegistrar.register(
+                uint256(labelhash(parentLabel)),
+                alice,
+                84600
+            );
+            assertEq(
+                baseRegistrar.ownerOf(uint256(labelhash(parentLabel))),
+                address(alice)
+            );
+            wrapper.wrapETH2LD(
+                parentLabel,
+                alice,
+                uint16(parentFuse),
+                EMPTY_ADDRESS
+            );
+            vm.expectRevert(
+                abi.encodeWithSelector(OperationProhibited.selector, parentNode)
+            );
+            wrapper.setSubnodeOwner(
+                parentNode,
+                childLabel,
+                bob,
+                childFuse,
+                timestamp
+            );
+            return;
+        }
+
         vm.expectEmit(true, true, false, false);
-        emit NameWrapped(
-            parentNode,
-            bytes(name),
-            alice,
-            CANNOT_UNWRAP | parentFuse,
-            timestamp
-        );
+        emit NameWrapped(parentNode, bytes(name), alice, parentFuse, timestamp);
 
         setupState(
             parentNode,
             parentLabel,
             childLabel,
-            CANNOT_UNWRAP | parentFuse,
-            PARENT_CANNOT_CONTROL | CANNOT_UNWRAP | childFuse,
+            parentFuse,
+            childFuse,
             timestamp
         );
 
@@ -228,10 +257,7 @@ contract NameWrapperTest is PTest {
         );
 
         ownerIsOwner(childNode, bob);
-        ownerResetsToZeroWhenExpired(
-            childNode,
-            PARENT_CANNOT_CONTROL | CANNOT_UNWRAP | childFuse
-        );
+        ownerResetsToZeroWhenExpired(childNode, childFuse);
     }
 
     function testWrap_CANNOT_BURN(uint32 parentFuse, uint32 childFuse) public {
@@ -318,8 +344,25 @@ contract NameWrapperTest is PTest {
 
         registry.setSubnodeOwner(xyzNamehash, labelhash(label), alice);
 
+        vm.stopPrank();
+        vm.startPrank(bob);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(Unauthorised.selector, wrapUnwrapXYZNamehash, address(bob))
+        );
         wrapper.wrap(encodedNameWrapUnwrapXYZ, alice, EMPTY_ADDRESS);
+
+        vm.stopPrank();
+        vm.startPrank(alice);
+
+        wrapper.wrap(encodedNameWrapUnwrapXYZ, alice, MOCK_RESOLVER);
         assertEq(wrapper.ownerOf(uint256(wrapUnwrapXYZNamehash)), alice);
+
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IncorrectTargetOwner.selector, address(wrapper))
+        );
+        wrapper.unwrap(xyzNamehash, labelhash(label), address(wrapper));
 
         wrapper.unwrap(xyzNamehash, labelhash(label), alice);
         assertEq(wrapper.ownerOf(uint256(xyzNamehash)), EMPTY_ADDRESS);
@@ -341,7 +384,10 @@ contract NameWrapperTest is PTest {
         );
 
         vm.expectRevert(
-            abi.encodeWithSelector(IncorrectTargetOwner.selector, address(wrapper))
+            abi.encodeWithSelector(
+                IncorrectTargetOwner.selector,
+                address(wrapper)
+            )
         );
         wrapper.unwrapETH2LD(labelHash, address(wrapper), address(wrapper));
 
@@ -354,8 +400,8 @@ contract NameWrapperTest is PTest {
         uint16 childFuse,
         uint64 timestamp
     ) external {
-        vm.assume(filterFuses(parentFuse, 0));
-        vm.assume(filterFuses(childFuse, 0));
+        vm.assume(filterFuses(parentFuse));
+        vm.assume(filterFuses(childFuse));
         vm.assume(timestamp > CONTRACT_INIT_TIMESTAMP);
 
         string memory parentLabel = "childfusestest";
@@ -394,12 +440,11 @@ contract NameWrapperTest is PTest {
         // Subdomain should not be transferable if parent domain is expired.
         vm.assume(
             filterFuses(
-                parentFuse,
+                parentFuse
                 // filter out CANNOT_SET_TTL, CANNOT_SET_RESOLVER and CANNOT_CREATE_SUBDOMAIN
-                CANNOT_CREATE_SUBDOMAIN | CANNOT_SET_RESOLVER | CANNOT_SET_TTL
             )
         );
-        vm.assume(filterFuses(childFuse, 0));
+        vm.assume(filterFuses(childFuse));
         vm.assume(timestamp > CONTRACT_INIT_TIMESTAMP);
         string memory parentLabel = "testrecord";
         string memory childLabel = "subrecord";
@@ -411,6 +456,29 @@ contract NameWrapperTest is PTest {
 
         // to be able to use setSubnode record parent name fuse should be
         // either in CAN_DO_EVERYTHING state (child too in this case) or PARENT_CANNOT_CONTROL | CANNOT_UNWRAP
+        if (
+            !(parentFuse == 0 && childFuse == 0) &&
+            fuseForbidden(
+                parentFuse,
+                CANNOT_CREATE_SUBDOMAIN | CANNOT_SET_RESOLVER | CANNOT_SET_TTL
+            )
+        ) {
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    OperationProhibited.selector,
+                    testnameNamehash
+                )
+            );
+            wrapper.registerAndWrapETH2LD(
+                parentLabel,
+                alice,
+                86400,
+                EMPTY_ADDRESS,
+                parentFuse
+            );
+            return;
+        }
+
         wrapper.registerAndWrapETH2LD(
             parentLabel,
             alice,
@@ -442,10 +510,7 @@ contract NameWrapperTest is PTest {
     }
 
     function testSetResolver(uint32 parentFuse, uint64 timestamp) public {
-        vm.assume(
-            // filter out CANNOT_SET_RESOLVER
-            filterFuses(parentFuse, CANNOT_SET_RESOLVER)
-        );
+        vm.assume(filterFuses(parentFuse));
         vm.assume(
             timestamp > CONTRACT_INIT_TIMESTAMP &&
                 timestamp < type(uint64).max - 100
@@ -454,7 +519,16 @@ contract NameWrapperTest is PTest {
         string memory label = "resolvertest";
         bytes32 tokenId = namehash(label);
 
-        registerSetupAndWrapName(label, alice, CANNOT_UNWRAP | parentFuse, timestamp);
+        registerSetupAndWrapName(label, alice, parentFuse, timestamp);
+
+        if (parentFuse != 0 && fuseForbidden(parentFuse, CANNOT_SET_RESOLVER)) {
+            vm.expectRevert(
+                abi.encodeWithSelector(OperationProhibited.selector, tokenId)
+            );
+            wrapper.setResolver(tokenId, MOCK_RESOLVER);
+            return;
+        }
+
         wrapper.setResolver(tokenId, MOCK_RESOLVER);
         assertEq(registry.resolver(tokenId), MOCK_RESOLVER);
     }
@@ -462,7 +536,7 @@ contract NameWrapperTest is PTest {
     function testSetTTL(uint32 parentFuse, uint64 timestamp) public {
         vm.assume(
             // filter out CANNOT_SET_TTL
-            filterFuses(parentFuse, CANNOT_SET_TTL)
+            filterFuses(parentFuse)
         );
         vm.assume(
             timestamp > CONTRACT_INIT_TIMESTAMP &&
@@ -473,14 +547,18 @@ contract NameWrapperTest is PTest {
         bytes32 tokenId = namehash(label);
 
         registerSetupAndWrapName(label, alice, parentFuse, timestamp);
+        if ((parentFuse != 0) && fuseForbidden(parentFuse, CANNOT_SET_TTL)) {
+            vm.expectRevert(
+                abi.encodeWithSelector(OperationProhibited.selector, tokenId)
+            );
+            wrapper.setTTL(tokenId, timestamp + 100);
+            return;
+        }
         wrapper.setTTL(tokenId, timestamp + 100);
     }
 
     function testSetRecord(uint32 parentFuse, uint64 timestamp) public {
-        vm.assume(
-            // filter out CANNOT_SET_TTL
-            filterFuses(parentFuse, CANNOT_SET_RESOLVER | CANNOT_SET_TTL)
-        );
+        vm.assume(filterFuses(parentFuse));
         vm.assume(
             timestamp > CONTRACT_INIT_TIMESTAMP &&
                 timestamp < type(uint64).max - 100
@@ -496,38 +574,46 @@ contract NameWrapperTest is PTest {
         );
         wrapper.setRecord(tokenId, EMPTY_ADDRESS, MOCK_RESOLVER, timestamp);
 
+        if (
+            (parentFuse != 0) &&
+            fuseForbidden(parentFuse, CANNOT_SET_RESOLVER | CANNOT_SET_TTL)
+        ) {
+            vm.expectRevert(
+                abi.encodeWithSelector(OperationProhibited.selector, tokenId)
+            );
+            wrapper.setRecord(tokenId, bob, MOCK_RESOLVER, timestamp);
+            return;
+        }
         wrapper.setRecord(tokenId, bob, MOCK_RESOLVER, timestamp);
     }
 
     function testSetFuses(uint32 parentFuse, uint64 timestamp) public {
         vm.assume(
             // filter out CANNOT_BURN_FUSES
-            filterFuses(parentFuse, CANNOT_BURN_FUSES)
+            filterFuses(parentFuse)
         );
         vm.assume(
-            timestamp > block.timestamp &&
-                timestamp < type(uint64).max - 100
+            timestamp > block.timestamp && timestamp < type(uint64).max - 100
         );
 
         string memory label = "fusetest";
         bytes32 tokenId = namehash(label);
 
-        registerSetupAndWrapName(
-            label,
-            alice,
-            CANNOT_UNWRAP | parentFuse,
-            timestamp
-        );
+        registerSetupAndWrapName(label, alice, parentFuse, timestamp);
+
+        if (fuseForbidden(parentFuse, CANNOT_BURN_FUSES)) {
+            vm.expectRevert(
+                abi.encodeWithSelector(OperationProhibited.selector, tokenId)
+            );
+            wrapper.setFuses(tokenId, uint16(CANNOT_SET_TTL));
+            return;
+        }
 
         wrapper.setFuses(tokenId, uint16(CANNOT_SET_TTL));
         (, uint32 fuses, ) = wrapper.getData(uint256(tokenId));
         assertEq(
             fuses,
-            PARENT_CANNOT_CONTROL |
-                CANNOT_UNWRAP |
-                parentFuse |
-                CANNOT_SET_TTL |
-                IS_DOT_ETH
+            PARENT_CANNOT_CONTROL | parentFuse | CANNOT_SET_TTL | IS_DOT_ETH
         );
     }
 
@@ -623,12 +709,15 @@ contract NameWrapperTest is PTest {
         wrapper.wrapETH2LD(label, account, uint16(fuses), EMPTY_ADDRESS);
     }
 
-    function filterFuses(uint32 fuses, uint32 filter) private returns (bool) {
-        if (fuses == 0) return true;
-        uint32 diff = fuses ^ (1 | (1 << 16));
+    function fuseForbidden(uint32 fuse, uint32 filter) private returns (bool) {
+        return (fuse & filter > 0 || fuse & CANNOT_UNWRAP == 0);
+    }
 
-        // check if any of filtered fuse is included into provided fuse set
-        if (diff & filter > 0) return false;
+    function filterFuses(uint32 fuses) private returns (bool) {
+        if (fuses == 0) return true;
+        if ((fuses & CANNOT_UNWRAP) == 0) return false;
+
+        uint32 diff = fuses ^ (1 | (1 << 16));
 
         uint32[5] memory fuseDict = [
             CANNOT_CREATE_SUBDOMAIN,
