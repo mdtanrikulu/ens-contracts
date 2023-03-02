@@ -348,7 +348,11 @@ contract NameWrapperTest is PTest {
         vm.startPrank(bob);
 
         vm.expectRevert(
-            abi.encodeWithSelector(Unauthorised.selector, wrapUnwrapXYZNamehash, address(bob))
+            abi.encodeWithSelector(
+                Unauthorised.selector,
+                wrapUnwrapXYZNamehash,
+                address(bob)
+            )
         );
         wrapper.wrap(encodedNameWrapUnwrapXYZ, alice, EMPTY_ADDRESS);
 
@@ -358,9 +362,11 @@ contract NameWrapperTest is PTest {
         wrapper.wrap(encodedNameWrapUnwrapXYZ, alice, MOCK_RESOLVER);
         assertEq(wrapper.ownerOf(uint256(wrapUnwrapXYZNamehash)), alice);
 
-
         vm.expectRevert(
-            abi.encodeWithSelector(IncorrectTargetOwner.selector, address(wrapper))
+            abi.encodeWithSelector(
+                IncorrectTargetOwner.selector,
+                address(wrapper)
+            )
         );
         wrapper.unwrap(xyzNamehash, labelhash(label), address(wrapper));
 
@@ -513,7 +519,7 @@ contract NameWrapperTest is PTest {
         vm.assume(filterFuses(parentFuse));
         vm.assume(
             timestamp > CONTRACT_INIT_TIMESTAMP &&
-                timestamp < type(uint64).max - 100
+                timestamp <= type(uint64).max - CONTRACT_INIT_TIMESTAMP
         );
 
         string memory label = "resolvertest";
@@ -533,15 +539,23 @@ contract NameWrapperTest is PTest {
         assertEq(registry.resolver(tokenId), MOCK_RESOLVER);
     }
 
-    function testSetTTL(uint32 parentFuse, uint64 timestamp) public {
+    function testSetTTL(
+        uint32 parentFuse,
+        uint64 timestamp,
+        uint64 ttl
+    ) public {
         vm.assume(
             // filter out CANNOT_SET_TTL
             filterFuses(parentFuse)
         );
+
         vm.assume(
             timestamp > CONTRACT_INIT_TIMESTAMP &&
-                timestamp < type(uint64).max - 100
+                timestamp <= type(uint64).max - CONTRACT_INIT_TIMESTAMP
+            // more than given amount will cause aritmethic overflow under _wrapETH2LD
         );
+
+        vm.assume(ttl < type(uint64).max);
 
         string memory label = "ttltest";
         bytes32 tokenId = namehash(label);
@@ -551,17 +565,17 @@ contract NameWrapperTest is PTest {
             vm.expectRevert(
                 abi.encodeWithSelector(OperationProhibited.selector, tokenId)
             );
-            wrapper.setTTL(tokenId, timestamp + 100);
+            wrapper.setTTL(tokenId, ttl);
             return;
         }
-        wrapper.setTTL(tokenId, timestamp + 100);
+        wrapper.setTTL(tokenId, ttl);
     }
 
     function testSetRecord(uint32 parentFuse, uint64 timestamp) public {
         vm.assume(filterFuses(parentFuse));
         vm.assume(
             timestamp > CONTRACT_INIT_TIMESTAMP &&
-                timestamp < type(uint64).max - 100
+                timestamp <= type(uint64).max - CONTRACT_INIT_TIMESTAMP
         );
 
         string memory label = "recordtest";
@@ -593,7 +607,8 @@ contract NameWrapperTest is PTest {
             filterFuses(parentFuse)
         );
         vm.assume(
-            timestamp > block.timestamp && timestamp < type(uint64).max - 100
+            timestamp > block.timestamp &&
+                timestamp <= type(uint64).max - CONTRACT_INIT_TIMESTAMP
         );
 
         string memory label = "fusetest";
