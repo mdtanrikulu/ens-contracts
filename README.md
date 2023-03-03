@@ -146,6 +146,7 @@ PublicResolver includes the following profiles that implements different EIPs.
 
 ## Developer guide
 
+
 ### How to setup
 
 ```
