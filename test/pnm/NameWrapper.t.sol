@@ -585,7 +585,7 @@ contract NameWrapperTest is PTest {
 
         if (
             (parentFuse != 0) &&
-            fuseForbidden(parentFuse, CANNOT_SET_RESOLVER | CANNOT_SET_TTL)
+            fuseForbidden(parentFuse, CANNOT_BURN_FUSES | CANNOT_SET_RESOLVER | CANNOT_SET_TTL)
         ) {
             vm.expectRevert(
                 abi.encodeWithSelector(OperationProhibited.selector, tokenId)
