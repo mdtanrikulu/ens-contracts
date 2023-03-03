@@ -583,11 +583,6 @@ contract NameWrapperTest is PTest {
 
         registerSetupAndWrapName(label, alice, parentFuse, timestamp);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IncorrectTargetOwner.selector, EMPTY_ADDRESS)
-        );
-        wrapper.setRecord(tokenId, EMPTY_ADDRESS, MOCK_RESOLVER, timestamp);
-
         if (
             (parentFuse != 0) &&
             fuseForbidden(parentFuse, CANNOT_SET_RESOLVER | CANNOT_SET_TTL)
@@ -598,6 +593,12 @@ contract NameWrapperTest is PTest {
             wrapper.setRecord(tokenId, bob, MOCK_RESOLVER, timestamp);
             return;
         }
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IncorrectTargetOwner.selector, EMPTY_ADDRESS)
+        );
+        wrapper.setRecord(tokenId, EMPTY_ADDRESS, MOCK_RESOLVER, timestamp);
+
         wrapper.setRecord(tokenId, bob, MOCK_RESOLVER, timestamp);
     }
 
@@ -608,7 +609,9 @@ contract NameWrapperTest is PTest {
         );
         vm.assume(
             timestamp > block.timestamp &&
-                timestamp <= type(uint64).max - CONTRACT_INIT_TIMESTAMP
+                timestamp <= type(uint64).max - (CONTRACT_INIT_TIMESTAMP + block.timestamp)
+                // duration + block.timestamp applies under ens._register
+                // GRACE_PERIOD applies under wrapper._wrapETH2LD
         );
 
         string memory label = "fusetest";
