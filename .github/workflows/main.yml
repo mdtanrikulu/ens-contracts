@@ -19,7 +19,7 @@ jobs:
 
       - run: yarn install --frozen-lockfile
 
-      - run: yarn compile
+      - run: npx hardhat compile
 
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3
