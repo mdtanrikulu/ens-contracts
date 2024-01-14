@@ -8,7 +8,7 @@ import dotenv from 'dotenv'
 import 'hardhat-abi-exporter'
 import 'hardhat-contract-sizer'
 import 'hardhat-deploy'
-import 'hardhat-gas-reporter'
+// import 'hardhat-gas-reporter'
 import { HardhatUserConfig } from 'hardhat/config'
 import { promisify } from 'util'
 

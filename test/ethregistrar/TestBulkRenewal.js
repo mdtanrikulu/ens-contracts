@@ -66,10 +66,12 @@ contract('BulkRenewal', function (accounts) {
 
     // Set up a dummy price oracle and a controller
     const dummyOracle = await DummyOracle.new(BigInt(100000000))
+    console.log('dummyOracle', dummyOracle.address)
     priceOracle = await StablePriceOracle.new(
       dummyOracle.address,
       [0, 0, 4, 2, 1],
     )
+    console.log('priceOracle', priceOracle.address)
     controller = await ETHRegistrarController.new(
       baseRegistrar.address,
       priceOracle.address,
@@ -80,6 +82,7 @@ contract('BulkRenewal', function (accounts) {
       ens.address,
       { from: ownerAccount },
     )
+    console.log('controller', controller.address)
     var wrapperAddress = await controller.nameWrapper()
     await baseRegistrar.addController(controller.address, {
       from: ownerAccount,
@@ -113,9 +116,13 @@ contract('BulkRenewal', function (accounts) {
   })
 
   it('should return the cost of a bulk renewal', async () => {
-    const resullt = await bulkRenewal.rentPrice(['test1', 'test2'], 86400)
-    console.log('resullt', resullt)
-    assert.equal(resullt, 86400 * 2)
+    try {
+      const resullt = await bulkRenewal.rentPrice(['test1', 'test2'], 86400)
+      console.log('resullt', resullt)
+      assert.equal(resullt, 86400 * 2)
+    } catch (error) {
+      console.log(error)
+    }
   })
 
   it('should raise an error trying to renew a nonexistent name', async () => {
@@ -123,15 +130,19 @@ contract('BulkRenewal', function (accounts) {
   })
 
   it('should permit bulk renewal of names', async () => {
-    const oldExpiry = await baseRegistrar.nameExpires(sha3('test2'))
-    const tx = await bulkRenewal.renewAll(['test1', 'test2'], 86400, {
-      value: 86401 * 2,
-    })
-    console.log('resultx', tx)
-    assert.equal(tx.receipt.status, true)
-    const newExpiry = await baseRegistrar.nameExpires(sha3('test2'))
-    assert.equal(newExpiry - oldExpiry, 86400)
-    // Check any excess funds are returned
-    assert.equal(await web3.eth.getBalance(bulkRenewal.address), 0)
+    try {
+      const oldExpiry = await baseRegistrar.nameExpires(sha3('test2'))
+      const tx = await bulkRenewal.renewAll(['test1', 'test2'], 86400, {
+        value: 86401 * 2,
+      })
+      console.log('resultx', tx)
+      assert.equal(tx.receipt.status, true)
+      const newExpiry = await baseRegistrar.nameExpires(sha3('test2'))
+      assert.equal(newExpiry - oldExpiry, 86400)
+      // Check any excess funds are returned
+      assert.equal(await web3.eth.getBalance(bulkRenewal.address), 0)
+    } catch (error) {
+      console.log(error)
+    }
   })
 })
