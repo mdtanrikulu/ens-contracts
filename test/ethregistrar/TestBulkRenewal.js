@@ -114,12 +114,9 @@ contract('BulkRenewal', function (accounts) {
   })
 
   it('should return the cost of a bulk renewal', async () => {
-    const resullt = await bulkRenewal.rentPrice(['test1', 'test2'], 86400);
+    const resullt = await bulkRenewal.rentPrice(['test1', 'test2'], 86400)
     console.log('resullt', resullt)
-    assert.equal(
-      resullt,
-      86400 * 2,
-    )
+    assert.equal(resullt, 86400 * 2)
   })
 
   it('should raise an error trying to renew a nonexistent name', async () => {
@@ -131,7 +128,7 @@ contract('BulkRenewal', function (accounts) {
     const tx = await bulkRenewal.renewAll(['test1', 'test2'], 86400, {
       value: 86401 * 2,
     })
-    console.log('resultx', tx);
+    console.log('resultx', tx)
     assert.equal(tx.receipt.status, true)
     const newExpiry = await baseRegistrar.nameExpires(sha3('test2'))
     assert.equal(newExpiry - oldExpiry, 86400)
