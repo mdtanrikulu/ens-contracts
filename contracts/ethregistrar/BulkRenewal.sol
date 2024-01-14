@@ -7,6 +7,7 @@ import "./IETHRegistrarController.sol";
 import "../resolvers/Resolver.sol";
 import "./IBulkRenewal.sol";
 import "./IPriceOracle.sol";
+import "hardhat/console.sol";
 
 import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
@@ -42,6 +43,7 @@ contract BulkRenewal is IBulkRenewal {
                 names[i],
                 duration
             );
+            console.logUint(price.base);
             unchecked {
                 ++i;
                 total += (price.base + price.premium);
@@ -61,6 +63,7 @@ contract BulkRenewal is IBulkRenewal {
                 names[i],
                 duration
             );
+            console.logUint(price.base);
             uint256 totalPrice = price.base + price.premium;
             controller.renew{value: totalPrice}(names[i], duration);
             unchecked {

@@ -11,7 +11,6 @@ const { EMPTY_BYTES32: EMPTY_BYTES } = require('../test-utils/constants')
 
 const namehash = require('eth-ens-namehash')
 const sha3 = require('web3-utils').sha3
-const toBN = require('web3-utils').toBN
 const { exceptions } = require('../test-utils')
 
 const ETH_LABEL = sha3('eth')
@@ -66,7 +65,7 @@ contract('BulkRenewal', function (accounts) {
     )
 
     // Set up a dummy price oracle and a controller
-    const dummyOracle = await DummyOracle.new(toBN(100000000))
+    const dummyOracle = await DummyOracle.new(BigInt(100000000))
     priceOracle = await StablePriceOracle.new(
       dummyOracle.address,
       [0, 0, 4, 2, 1],
